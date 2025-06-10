@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InnerVoice - A Narrative Journey</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        :root {
+            --primary-bg: #0c0a1a;
+            --secondary-bg: #16213e;
+            --accent-color: #0f3460;
+            --text-color: #a29bfe;
+            --ui-text-color: #dfe6e9;
+            --border-color: #a29bfe;
+            --direct-color: #78e08f;    /* Assertive Green */
+            --avoidant-color: #74b9ff;  /* Passive Blue */
+            --passive-color: #fdcb6e;   /* Reserved Yellow */
+        }
+
+        body {
+            background-color: var(--primary-bg);
+            color: var(--ui-text-color);
+            font-family: 'Press Start 2P', cursive;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .game-container {
+            border: 4px solid var(--border-color);
+            border-radius: 15px;
+            box-shadow: 0 0 30px var(--text-color);
+            position: relative;
+            width: 95%;
+            max-width: 800px;
+            aspect-ratio: 16 / 9;
+            background-color: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            transition: filter 0.3s ease;
+        }
+        
+        canvas.paused {
+            filter: blur(5px) brightness(0.7);
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .ui-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .ui-box {
+            background-color: rgba(12, 10, 26, 0.9);
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+        
+        .ui-box h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+            color: var(--text-color);
+            text-shadow: 0 0 10px var(--text-color);
+        }
+
+        .ui-box p {
+            margin: 0 0 20px 0;
+            font-size: 0.8em;
+            line-height: 1.5;
+        }
+        
+        #encounter-choices {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .choice-button, #start-button {
+            font-family: 'Press Start 2P', cursive;
+            color: var(--ui-text-color);
+            border: 2px solid;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: transparent;
+            text-align: left;
+            font-size: 0.7em;
+            text-shadow: 1px 1px 2px #000;
+        }
+        
+        .choice-button.direct { border-color: var(--direct-color); }
+        .choice-button.avoidant { border-color: var(--avoidant-color); }
+        .choice-button.passive { border-color: var(--passive-color); }
+
+        .choice-button:hover, #start-button:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 15px;
+        }
+        #start-button { text-align: center; border-color: var(--text-color); }
+        #start-button:hover { background-color: var(--text-color); color: var(--primary-bg); box-shadow: 0 0 15px var(--text-color);}
+
+        .choice-button.direct:hover { background-color: var(--direct-color); box-shadow: 0 0 15px var(--direct-color); }
+        .choice-button.avoidant:hover { background-color: var(--avoidant-color); box-shadow: 0 0 15px var(--avoidant-color); }
+        .choice-button.passive:hover { background-color: var(--passive-color); box-shadow: 0 0 15px var(--passive-color); }
+
+        #language-flags {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .flag-button {
+            font-size: 24px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: all 0.2s ease;
+        }
+        .flag-button:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        .flag-button.active {
+            opacity: 1;
+            filter: drop-shadow(0 0 5px white);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <!-- Language Flags -->
+        <div id="language-flags">
+            <div id="lang-en" class="flag-button active">🇬🇧</div>
+            <div id="lang-pt" class="flag-button">🇧🇷</div>
+            <div id="lang-es" class="flag-button">🇪🇸</div>
+        </div>
+
+        <!-- The Game Canvas -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- UI for Welcome Screen -->
+        <div id="welcome-box" class="ui-overlay visible">
+             <div class="ui-box">
+                <h2 id="welcome-title">InnerVoice</h2>
+                <p id="welcome-instructions">Use the Arrow Keys to move. Your journey will present you with choices. Respond with your instinct. Your path will reveal your voice.</p>
+                <button id="start-button">Start Journey</button>
+            </div>
+        </div>
+
+        <!-- UI for Encounters -->
+        <div id="encounter-box" class="ui-overlay">
+            <div class="ui-box">
+                <h2 id="encounter-title"></h2>
+                <p id="encounter-description"></p>
+                <div id="encounter-choices"></div>
+            </div>
+        </div>
+
+        <!-- UI for Final Result -->
+        <div id="result-box" class="ui-overlay">
+            <div class="ui-box">
+                <h2 id="result-title"></h2>
+                <p id="result-text"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- SETUP ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const welcomeBox = document.getElementById('welcome-box');
+        const encounterBox = document.getElementById('encounter-box');
+        const resultBox = document.getElementById('result-box');
+        const langButtons = { en: document.getElementById('lang-en'), pt: document.getElementById('lang-pt'), es: document.getElementById('lang-es') };
+        const particles = [];
+        const stars = [];
+
+        // --- LOCALIZATION ---
+        const translations = {
+            // WELCOME
+            welcome_title: { en: "InnerVoice", pt: "Voz Interior", es: "Voz Interior" },
+            welcome_instructions: { en: "Use the Arrow Keys to move. Your journey will present you with choices. Respond with your instinct. Your path will reveal your voice.", pt: "Use as Setas para mover. Sua jornada apresentará escolhas. Responda com seu instinto. Seu caminho revelará sua voz.", es: "Usa las Teclas de Flecha para moverte. Tu viaje te presentará elecciones. Responde con tu instinto. Tu camino revelará tu voz." },
+            welcome_start: { en: "Start Journey", pt: "Iniciar Jornada", es: "Iniciar Viaje" },
+            
+            // ENCOUNTERS
+            paper_monster_title: { en: "The Paper Monster", pt: "O Monstro de Papel", es: "El Monstruo de Papel" },
+            paper_monster_desc: { en: "A creature of folded paper blocks your path.", pt: "Uma criatura de papel dobrado bloqueia seu caminho.", es: "Una criatura de papel doblado bloquea tu camino." },
+            paper_monster_choice_1: { en: "Confront and address the monster.", pt: "Confrontar e interpelar o monstro.", es: "Enfrentar y dirigirse al monstruo." },
+            paper_monster_choice_2: { en: "Quietly find a path around it.", pt: "Encontrar silenciosamente um caminho ao redor.", es: "Encontrar silenciosamente un camino para rodearlo." },
+            paper_monster_choice_3: { en: "Remain still, waiting for external changes.", pt: "Permanecer imóvel, esperando por mudanças externas.", es: "Quedarse quieto, esperando cambios externos." },
+
+            foggy_mirror_title: { en: "The Foggy Mirror", pt: "O Espelho Enevoado", es: "El Espejo Brumoso" },
+            foggy_mirror_desc: { en: "A mirror hangs in the air, its surface clouded and indistinct.", pt: "Um espelho flutua no ar, sua superfície turva e indistinta.", es: "Un espejo flota en el aire, su superficie nublada e indistinta." },
+            foggy_mirror_choice_1: { en: "Actively clean the mirror to see clearly.", pt: "Limpar ativamente o espelho para ver com clareza.", es: "Limpiar activamente el espejo para ver con claridad." },
+            foggy_mirror_choice_2: { en: "Look for a clearer mirror elsewhere.", pt: "Procurar por um espelho mais nítido em outro lugar.", es: "Buscar un espejo más claro en otro lugar." },
+            foggy_mirror_choice_3: { en: "Ignore the mirror and continue your journey.", pt: "Ignorar o espelho e continuar sua jornada.", es: "Ignorar el espejo y continuar tu viaje." },
+
+            broken_bridge_title: { en: "The Broken Bridge", pt: "A Ponte Quebrada", es: "El Puente Roto" },
+            broken_bridge_desc: { en: "The path ahead is severed by a wide gap.", pt: "O caminho à frente está cortado por uma grande lacuna.", es: "El camino por delante está cortado por un amplio abismo." },
+            broken_bridge_choice_1: { en: "Immediately attempt to fix the bridge yourself.", pt: "Tentar consertar a ponte imediatamente.", es: "Intentar arreglar el puente de inmediato." },
+            broken_bridge_choice_2: { en: "Find a longer alternative route.", pt: "Encontrar uma rota alternativa mais longa.", es: "Encontrar una ruta alternativa más larga." },
+            broken_bridge_choice_3: { en: "Wait, hoping someone else will resolve it.", pt: "Esperar, na esperança de que outra pessoa resolva.", es: "Esperar, con la esperanza de que alguien más lo resuelva." },
+
+            whispering_forest_title: { en: "The Whispering Forest", pt: "A Floresta Sussurrante", es: "El Bosque Susurrante" },
+            whispering_forest_desc: { en: "Indistinct whispers drift from the trees around you.", pt: "Sussurros indistintos vêm das árvores ao seu redor.", es: "Susurros indistintos emanan de los árboles a tu alrededor." },
+            whispering_forest_choice_1: { en: "Address the whispers openly and clarify facts.", pt: "Enfrentar os sussurros abertamente e esclarecer os fatos.", es: "Abordar los susurros abiertamente y aclarar los hechos." },
+            whispering_forest_choice_2: { en: "Quietly move through without engaging.", pt: "Mover-se silenciosamente sem se envolver.", es: "Moverse en silencio sin participar." },
+            whispering_forest_choice_3: { en: "Stop, hoping the whispers fade naturally.", pt: "Parar, esperando que os sussurros desapareçam naturalmente.", es: "Detenerse, esperando que los susurros se desvanezcan naturalmente." },
+
+            locked_gate_title: { en: "The Locked Gate", pt: "O Portão Trancado", es: "La Puerta Cerrada" },
+            locked_gate_desc: { en: "An ornate gate, firmly locked, bars the way forward.", pt: "Um portão ornamentado, firmemente trancado, barra o caminho.", es: "Una puerta ornamentada, firmemente cerrada, bloquea el paso." },
+            locked_gate_choice_1: { en: "Boldly knock and demand entry.", pt: "Bater com ousadia e exigir entrada.", es: "Golpear con audacia y exigir la entrada." },
+            locked_gate_choice_2: { en: "Seek another, indirect entrance.", pt: "Procurar outra entrada, indireta.", es: "Buscar otra entrada, indirecta." },
+            locked_gate_choice_3: { en: "Wait patiently for the gatekeeper to notice you.", pt: "Esperar pacientemente que o guardião o note.", es: "Esperar pacientemente a que el guardián te note." },
+
+            stone_wall_title: { en: "The Stone Wall", pt: "A Muralha de Pedra", es: "El Muro de Piedra" },
+            stone_wall_desc: { en: "A sheer and imposing wall of stone stands before you.", pt: "Uma muralha de pedra íngreme e imponente ergue-se à sua frente.", es: "Un muro de piedra, puro e imponente, se alza ante ti." },
+            stone_wall_choice_1: { en: "Attempt to break through or scale the wall.", pt: "Tentar atravessar ou escalar a muralha.", es: "Intentar atravesar o escalar el muro." },
+            stone_wall_choice_2: { en: "Search for a gap or hidden door around it.", pt: "Procurar por uma fresta ou porta escondida.", es: "Buscar una brecha o una puerta oculta." },
+            stone_wall_choice_3: { en: "Sit and reflect, waiting for it to weaken.", pt: "Sentar e refletir, esperando que ela enfraqueça.", es: "Sentarse y reflexionar, esperando que se debilite." },
+            
+            echoing_cave_title: { en: "The Echoing Cave", pt: "A Caverna Ecoante", es: "La Cueva Resonante" },
+            echoing_cave_desc: { en: "You enter a cave where every sound returns to you.", pt: "Você entra em uma caverna onde cada som retorna para você.", es: "Entras en una cueva donde cada sonido vuelve a ti." },
+            echoing_cave_choice_1: { en: "Articulate and ask directly for feedback.", pt: "Articular e pedir feedback diretamente.", es: "Articular y pedir retroalimentación directamente." },
+            echoing_cave_choice_2: { en: "Proceed carefully, listening but not engaging.", pt: "Prosseguir com cuidado, ouvindo mas sem interagir.", es: "Proceder con cuidado, escuchando pero sin participar." },
+            echoing_cave_choice_3: { en: "Remain silent, passively absorbing echoes.", pt: "Permanecer em silêncio, absorvendo passivamente os ecos.", es: "Permanecer en silencio, absorbiendo pasivamente los ecos." },
+
+            tangled_vines_title: { en: "The Tangled Vines", pt: "As Vinhas Emaranhadas", es: "Las Enredaderas" },
+            tangled_vines_desc: { en: "A thicket of tangled vines makes the path nearly impassable.", pt: "Um emaranhado de vinhas torna o caminho quase intransitável.", es: "Una espesura de enredaderas enmarañadas hace el camino casi intransitable." },
+            tangled_vines_choice_1: { en: "Actively cut through and simplify.", pt: "Cortar ativamente e simplificar.", es: "Cortar activamente y simplificar." },
+            tangled_vines_choice_2: { en: "Maneuver carefully around the complexity.", pt: "Manobrar cuidadosamente ao redor da complexidade.", es: "Maniobrar con cuidado alrededor de la complejidad." },
+            tangled_vines_choice_3: { en: "Pause, waiting for it to resolve itself.", pt: "Pausar, esperando que se resolva por si só.", es: "Pausar, esperando que se resuelva por sí mismo." },
+            
+            shifting_sands_title: { en: "The Shifting Sands", pt: "As Areias Movediças", es: "Las Arenas Movedizas" },
+            shifting_sands_desc: { en: "The ground beneath your feet shifts and flows like liquid.", pt: "O chão sob seus pés se move e flui como líquido.", es: "El suelo bajo tus pies se mueve y fluye como un líquido." },
+            shifting_sands_choice_1: { en: "Confidently stride forward despite instability.", pt: "Avançar confiantemente apesar da instabilidade.", es: "Avanzar con confianza a pesar de la inestabilidad." },
+            shifting_sands_choice_2: { en: "Look for stable ground and step cautiously.", pt: "Procurar por terreno estável e pisar com cautela.", es: "Buscar terreno estable y pisar con cautela." },
+            shifting_sands_choice_3: { en: "Remain stationary, observing how conditions evolve.", pt: "Permanecer parado, observando como as condições evoluem.", es: "Quedarse quieto, observando cómo evolucionan las condiciones." },
+
+            mirror_lake_title: { en: "The Great Mirror Lake", pt: "O Grande Lago Espelhado", es: "El Gran Lago Espejo" },
+            mirror_lake_desc: { en: "You arrive at the shore of a vast, placid lake.", pt: "Você chega à margem de um vasto e plácido lago.", es: "Llegas a la orilla de un vasto y plácido lago." },
+            mirror_lake_choice_1: { en: "Dive directly into the lake to fully engage.", pt: "Mergulhar diretamente no lago para se engajar totalmente.", es: "Zambullirse directamente en el lago para participar plenamente." },
+            mirror_lake_choice_2: { en: "Walk around the lake to observe indirectly.", pt: "Andar ao redor do lago para observar indiretamente.", es: "Caminar alrededor del lago para observar indirectamente." },
+            mirror_lake_choice_3: { en: "Sit by the shore, waiting passively for clarity.", pt: "Sentar-se à beira, esperando passivamente por clareza.", es: "Sentarse en la orilla, esperando pasivamente la claridad." },
+
+            // RESULTS
+            result_title: { en: "Communicator Profile", pt: "Perfil de Comunicador", es: "Perfil de Comunicador" },
+            Direct_title: { en: "The Direct Communicator", pt: "O Comunicador Direto", es: "El Comunicador Directo" },
+            direct_result: { en: "Active, assertive, and transparent. You face challenges head-on, seeking clarity and resolution without hesitation.", pt: "Ativo, assertivo e transparente. Você enfrenta desafios de frente, buscando clareza e resolução sem hesitar.", es: "Activo, asertivo y transparente. Afrontas los desafíos de frente, buscando claridad y resolución sin dudarlo." },
+            Adaptable_title: { en: "The Adaptable Communicator", pt: "O Comunicador Adaptável", es: "El Comunicador Adaptable" },
+            adaptable_result: { en: "Flexible, strategic, and indirect. You prefer to navigate around obstacles, finding clever routes to achieve your goals while preserving harmony.", pt: "Flexível, estratégico e indireto. Você prefere navegar ao redor de obstáculos, encontrando rotas inteligentes para alcançar seus objetivos enquanto preserva a harmonia.", es: "Flexible, estratégico e indirecto. Prefieres navegar alrededor de los obstáculos, encontrando rutas inteligentes para alcanzar tus metas mientras preservas la armonía." },
+            Reserved_title: { en: "The Reserved Communicator", pt: "O Comunicador Reservado", es: "El Comunicador Reservado" },
+            reserved_result: { en: "Observant, reflective, and cautious. You prefer to wait and understand a situation fully before acting, trusting that time and patience will reveal the best path.", pt: "Observador, reflexivo e cauteloso. Você prefere esperar e entender uma situação completamente antes de agir, confiando que o tempo e a paciência revelarão o melhor caminho.", es: "Observador, reflexivo y cauteloso. Prefieres esperar y comprender una situación completamente antes de actuar, confiando en que el tiempo y la paciencia revelarán el mejor camino." },
+            Balanced_title: { en: "The Balanced Communicator", pt: "O Comunicador Equilibrado", es: "El Comunicador Equilibrado" },
+            balanced_result: { en: "Versatile and situationally aware. You don't lean on one style, but instead choose the best approach for each unique challenge you face.", pt: "Versátil e ciente da situação. Você não se apoia em um único estilo, mas escolhe a melhor abordagem para cada desafio único que enfrenta.", es: "Versátil y consciente de la situación. No te apoyas en un solo estilo, sino que eliges el mejor enfoque para cada desafío único que enfrentas." },
+        };
+        let currentLanguage = 'en';
+
+        // --- GAME STATE ---
+        let gameState = 'welcome';
+        let currentEncounter = null;
+        let musicStarted = false;
+        const communicatorScores = { direct: 0, avoidant: 0, passive: 0 };
+
+        const encounters = [
+            { x: 800, id: 'paper_monster', icon: '📜', triggered: false, titleKey: 'paper_monster_title', descKey: 'paper_monster_desc', choices: [{ textKey: 'paper_monster_choice_1', style: 'direct' }, { textKey: 'paper_monster_choice_2', style: 'avoidant' }, { textKey: 'paper_monster_choice_3', style: 'passive' }], color: '#dfe6e9' },
+            { x: 1600, id: 'foggy_mirror', icon: '🪞', triggered: false, titleKey: 'foggy_mirror_title', descKey: 'foggy_mirror_desc', choices: [{ textKey: 'foggy_mirror_choice_1', style: 'direct' }, { textKey: 'foggy_mirror_choice_2', style: 'avoidant' }, { textKey: 'foggy_mirror_choice_3', style: 'passive' }], color: '#a29bfe' },
+            { x: 2400, id: 'broken_bridge', icon: '🌉', triggered: false, titleKey: 'broken_bridge_title', descKey: 'broken_bridge_desc', choices: [{ textKey: 'broken_bridge_choice_1', style: 'direct' }, { textKey: 'broken_bridge_choice_2', style: 'avoidant' }, { textKey: 'broken_bridge_choice_3', style: 'passive' }], color: '#74b9ff' },
+            { x: 3200, id: 'whispering_forest', icon: '🌲', triggered: false, titleKey: 'whispering_forest_title', descKey: 'whispering_forest_desc', choices: [{ textKey: 'whispering_forest_choice_1', style: 'direct' }, { textKey: 'whispering_forest_choice_2', style: 'avoidant' }, { textKey: 'whispering_forest_choice_3', style: 'passive' }], color: '#55efc4' },
+            { x: 4000, id: 'locked_gate', icon: '⛩️', triggered: false, titleKey: 'locked_gate_title', descKey: 'locked_gate_desc', choices: [{ textKey: 'locked_gate_choice_1', style: 'direct' }, { textKey: 'locked_gate_choice_2', style: 'avoidant' }, { textKey: 'locked_gate_choice_3', style: 'passive' }], color: '#fdcb6e' },
+            { x: 4800, id: 'stone_wall', icon: '🧱', triggered: false, titleKey: 'stone_wall_title', descKey: 'stone_wall_desc', choices: [{ textKey: 'stone_wall_choice_1', style: 'direct' }, { textKey: 'stone_wall_choice_2', style: 'avoidant' }, { textKey: 'stone_wall_choice_3', style: 'passive' }], color: '#ff7675' },
+            { x: 5600, id: 'echoing_cave', icon: '⛰️', triggered: false, titleKey: 'echoing_cave_title', descKey: 'echoing_cave_desc', choices: [{ textKey: 'echoing_cave_choice_1', style: 'direct' }, { textKey: 'echoing_cave_choice_2', style: 'avoidant' }, { textKey: 'echoing_cave_choice_3', style: 'passive' }], color: '#81ecec' },
+            { x: 6400, id: 'tangled_vines', icon: '🌿', triggered: false, titleKey: 'tangled_vines_title', descKey: 'tangled_vines_desc', choices: [{ textKey: 'tangled_vines_choice_1', style: 'direct' }, { textKey: 'tangled_vines_choice_2', style: 'avoidant' }, { textKey: 'tangled_vines_choice_3', style: 'passive' }], color: '#00b894' },
+            { x: 7200, id: 'shifting_sands', icon: '🏜️', triggered: false, titleKey: 'shifting_sands_title', descKey: 'shifting_sands_desc', choices: [{ textKey: 'shifting_sands_choice_1', style: 'direct' }, { textKey: 'shifting_sands_choice_2', style: 'avoidant' }, { textKey: 'shifting_sands_choice_3', style: 'passive' }], color: '#fab1a0' },
+            { x: 8000, id: 'mirror_lake', icon: '�', triggered: false, titleKey: 'mirror_lake_title', descKey: 'mirror_lake_desc', choices: [{ textKey: 'mirror_lake_choice_1', style: 'direct' }, { textKey: 'mirror_lake_choice_2', style: 'avoidant' }, { textKey: 'mirror_lake_choice_3', style: 'passive' }], color: '#6c5ce7' },
+            { x: 8800, id: 'final', icon: '🏁', triggered: false, color: '#ffffff' } // Final point
+        ];
+
+        // --- PLAYER & WORLD CONFIG ---
+        let lastTime = 0, groundHeight, worldWidth = 9200;
+        const targetFPS = 60, frameInterval = 1000 / targetFPS;
+        const player = { x: 100, y: 0, width: 40, height: 60, vx: 0, maxSpeed: 8, acceleration: 0.4, friction: 0.92, isMoving: false, direction: 1 };
+        const keys = { left: false, right: false };
+        const camera = { x: 0, y: 0, width: 0, height: 0, follow: function(t) { this.x = Math.max(0, Math.min(worldWidth - this.width, t.x - this.width / 3)); } };
+
+        // --- MUSIC ---
+        function startMusic() {
+            if (musicStarted || typeof Tone === 'undefined') return;
+            musicStarted = true;
+            Tone.start();
+            const synth = new Tone.FMSynth({
+                harmonicity: 3.01, modulationIndex: 14,
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 1.2 },
+                modulation: { type: "sine" },
+                modulationEnvelope: { attack: 0.01, decay: 0.5, sustain: 0.2, release: 0.1 }
+            }).toDestination();
+            synth.volume.value = -18;
+            const pattern = new Tone.Pattern((time, note) => {
+                synth.triggerAttackRelease(note, '4n', time);
+            }, ['C3', 'G3', 'Eb4', 'G3', 'Bb3', 'G3', 'C4', 'G3'], "dottedEighth");
+            pattern.start(0);
+            Tone.Transport.bpm.value = 90;
+            Tone.Transport.start();
+        }
+
+        // --- EVENT HANDLERS & UI LOGIC ---
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            Object.values(langButtons).forEach(btn => btn.classList.remove('active'));
+            langButtons[currentLanguage].classList.add('active');
+            
+            // Update welcome screen if visible
+            if(gameState === 'welcome') {
+                document.getElementById('welcome-title').innerText = translations.welcome_title[currentLanguage];
+                document.getElementById('welcome-instructions').innerText = translations.welcome_instructions[currentLanguage];
+                document.getElementById('start-button').innerText = translations.welcome_start[currentLanguage];
+            }
+            if (gameState === 'encounter') showEncounterUI(currentEncounter);
+            if (gameState === 'result') showResult();
+        }
+        
+        Object.keys(langButtons).forEach(key => {
+            langButtons[key].addEventListener('click', () => setLanguage(key));
+        });
+        
+        document.getElementById('start-button').addEventListener('click', () => {
+            welcomeBox.classList.remove('visible');
+            canvas.classList.remove('paused');
+            gameState = 'playing';
+            startMusic();
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'ArrowRight') keys.right = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+        });
+        
+        function triggerEncounter(encounter) {
+            if (encounter.id === 'final') { showResult(); return; }
+            gameState = 'encounter';
+            currentEncounter = encounter;
+            player.vx = 0;
+            showEncounterUI(encounter);
+        }
+
+        function showEncounterUI(encounter) {
+            document.getElementById('encounter-title').innerText = translations[encounter.titleKey][currentLanguage];
+            document.getElementById('encounter-description').innerText = translations[encounter.descKey][currentLanguage];
+            const choicesContainer = document.getElementById('encounter-choices');
+            choicesContainer.innerHTML = '';
+            encounter.choices.forEach(choice => {
+                const button = document.createElement('button');
+                button.className = `choice-button ${choice.style}`;
+                button.innerText = translations[choice.textKey][currentLanguage];
+                button.onclick = () => handleChoice(choice.style);
+                choicesContainer.appendChild(button);
+            });
+            encounterBox.classList.add('visible');
+            canvas.classList.add('paused');
+        }
+
+        function handleChoice(style) {
+            communicatorScores[style]++;
+            currentEncounter.triggered = true;
+            gameState = 'playing';
+            encounterBox.classList.remove('visible');
+            canvas.classList.remove('paused');
+        }
+
+        function showResult() {
+            gameState = 'result';
+            player.vx = 0;
+            const scores = communicatorScores;
+            const sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            let resultProfile;
+            if (sortedScores.length > 1 && sortedScores[0][1] === sortedScores[1][1]) {
+                resultProfile = 'Balanced';
+            } else {
+                const topStyle = sortedScores[0][0];
+                if (topStyle === 'direct') resultProfile = 'Direct';
+                else if (topStyle === 'avoidant') resultProfile = 'Adaptable';
+                else if (topStyle === 'passive') resultProfile = 'Reserved';
+            }
+            document.getElementById('result-title').innerText = translations[`${resultProfile}_title`][currentLanguage];
+            document.getElementById('result-text').innerText = translations[`${resultProfile.toLowerCase()}_result`][currentLanguage];
+            resultBox.classList.add('visible');
+            canvas.classList.add('paused');
+        }
+
+        // --- GAME LOGIC (UPDATE) ---
+        function update() {
+            if (gameState !== 'playing') return;
+
+            if (keys.right) { player.vx += player.acceleration; player.direction = 1; }
+            else if (keys.left) { player.vx -= player.acceleration; player.direction = -1; }
+            else { player.vx *= player.friction; }
+            
+            player.vx = Math.max(-player.maxSpeed, Math.min(player.maxSpeed, player.vx));
+            if (Math.abs(player.vx) < 0.1) player.vx = 0;
+            
+            player.x += player.vx;
+            player.x = Math.max(0, Math.min(worldWidth - player.width, player.x));
+            player.isMoving = Math.abs(player.vx) > 0.1;
+            
+            for (const encounter of encounters) {
+                if (!encounter.triggered && player.x >= encounter.x) {
+                    triggerEncounter(encounter);
+                    break;
+                }
+            }
+            camera.follow(player);
+            particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.alpha -= 0.02; });
+            particles.filter(p => p.alpha > 0);
+        }
+
+        // --- RENDERING (DRAW) ---
+        function drawPlayer() {
+            ctx.save();
+            const centerX = player.x + player.width / 2;
+            const centerY = player.y + player.height / 2;
+            ctx.translate(centerX, centerY);
+            if (player.direction === -1) ctx.scale(-1, 1);
+            const bob = player.isMoving ? Math.sin(Date.now() / 100) * 2 : 0;
+            const legSwing1 = player.isMoving ? Math.sin(Date.now() / 150) * 8 : 0;
+            const legSwing2 = player.isMoving ? Math.sin(Date.now() / 150 + Math.PI) * 8 : 0;
+            ctx.shadowColor = 'rgba(200, 225, 255, 0.7)';
+            ctx.shadowBlur = 30;
+            ctx.fillStyle = 'rgba(120, 140, 160, 0.9)';
+            const legWidth = 10, legHeight = 25;
+            ctx.fillRect(-legWidth / 2 + legSwing2 / 2, 5, legWidth, legHeight);
+            ctx.fillRect(-legWidth / 2 + legSwing1 / 2, 5, legWidth, legHeight);
+            ctx.beginPath(); ctx.moveTo(-15, 20); ctx.quadraticCurveTo(0, -25, 15, 20); ctx.closePath(); ctx.fill();
+            ctx.shadowBlur = 0; 
+            ctx.fillStyle = 'white';
+            const eyeY = -15 + bob;
+            ctx.beginPath(); ctx.arc(-6, eyeY, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(6, eyeY, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowColor = 'white'; ctx.shadowBlur = 10;
+            ctx.fillStyle = '#dfe6e9';
+            const diamondCenterY = 2, diamondSize = 6;
+            ctx.beginPath();
+            ctx.moveTo(0, diamondCenterY - diamondSize); ctx.lineTo(diamondSize * 0.7, diamondCenterY);
+            ctx.lineTo(0, diamondCenterY + diamondSize); ctx.lineTo(-diamondSize * 0.7, diamondCenterY);
+            ctx.closePath(); ctx.fill();
+            ctx.restore();
+        }
+
+        function drawEncounterMarker(enc) {
+            const yPos = groundHeight - 25;
+            ctx.save();
+            ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 500) * 0.2;
+            ctx.shadowColor = enc.color;
+            ctx.shadowBlur = 25;
+            ctx.font = '40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(enc.icon, enc.x, yPos);
+            ctx.restore();
+            ctx.save();
+            ctx.font = '40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'white';
+            ctx.fillText(enc.icon, enc.x, yPos);
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgb(12, 10, 26)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            stars.forEach(star => {
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
+                ctx.beginPath(); ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2); ctx.fill();
+            });
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+            const groundGrad = ctx.createLinearGradient(0, groundHeight, 0, groundHeight + 70);
+            groundGrad.addColorStop(0, 'rgba(162, 155, 254, 0.4)');
+            groundGrad.addColorStop(0.1, 'rgba(12, 10, 26, 0)');
+            ctx.fillStyle = groundGrad; ctx.fillRect(0, groundHeight, worldWidth, 70);
+            ctx.strokeStyle = 'rgba(223, 230, 233, 0.8)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(0, groundHeight); ctx.lineTo(worldWidth, groundHeight); ctx.stroke();
+            
+            if(gameState === 'playing') {
+                 encounters.forEach(enc => { if (!enc.triggered) drawEncounterMarker(enc); });
+                 particles.forEach(p => {
+                    ctx.fillStyle = `rgba(223, 230, 233, ${p.alpha})`;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+                });
+                drawPlayer();
+            }
+           
+            ctx.restore();
+        }
+
+        // --- MAIN GAME LOOP ---
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            if (deltaTime > frameInterval) {
+                lastTime = timestamp - (deltaTime % frameInterval);
+                if (gameState !== 'welcome') {
+                    update();
+                }
+                draw();
+            }
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // --- RESIZE AND INITIALIZE ---
+        function init() {
+            resizeCanvas();
+            setLanguage('en'); // Set default language for welcome screen text
+            canvas.classList.add('paused'); // Start with canvas blurred for welcome screen
+            for(let i=0; i<100; i++) stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, r: Math.random() * 1.5, alpha: Math.random() * 0.5 + 0.2 });
+            setInterval(() => {
+                if(player.isMoving && gameState === 'playing') {
+                     particles.push({ x: player.x + player.width/2, y: player.y + player.height, r: Math.random() * 2, vx: (Math.random() - 0.5) * 0.5, vy: -Math.random() * 0.5, alpha: 1.0 });
+                }
+            }, 100);
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resizeCanvas() {
+            canvas.width = 800; canvas.height = 450;
+            groundHeight = canvas.height - 70;
+            player.y = groundHeight - player.height;
+            camera.width = canvas.width; camera.height = canvas.height;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        init();
+
+    </script>
+</body>
+</html>
+�
