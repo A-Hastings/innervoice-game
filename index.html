@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>InnerVoice - A Narrative Journey</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
@@ -158,6 +158,43 @@
             opacity: 1;
             filter: drop-shadow(0 0 5px white);
         }
+        
+        #touch-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 101;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #touch-controls.visible {
+            opacity: 1;
+        }
+
+        .touch-button {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            user-select: none;
+            pointer-events: auto;
+            transition: background-color 0.2s;
+        }
+
+        .touch-button:active {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
 
     </style>
 </head>
@@ -199,6 +236,12 @@
                 <p id="result-text"></p>
             </div>
         </div>
+        
+        <!-- On-screen controls for mobile -->
+        <div id="touch-controls">
+            <div id="touch-left" class="touch-button">◀</div>
+            <div id="touch-right" class="touch-button">▶</div>
+        </div>
     </div>
 
     <script>
@@ -209,6 +252,9 @@
         const encounterBox = document.getElementById('encounter-box');
         const resultBox = document.getElementById('result-box');
         const langButtons = { en: document.getElementById('lang-en'), pt: document.getElementById('lang-pt'), es: document.getElementById('lang-es') };
+        const touchControls = document.getElementById('touch-controls');
+        const touchLeft = document.getElementById('touch-left');
+        const touchRight = document.getElementById('touch-right');
         const particles = [];
         const stars = [];
 
@@ -216,7 +262,7 @@
         const translations = {
             // WELCOME
             welcome_title: { en: "InnerVoice", pt: "Voz Interior", es: "Voz Interior" },
-            welcome_instructions: { en: "Use the Arrow Keys to move. Your journey will present you with choices. Respond with your instinct. Your path will reveal your voice.", pt: "Use as Setas para mover. Sua jornada apresentará escolhas. Responda com seu instinto. Seu caminho revelará sua voz.", es: "Usa las Teclas de Flecha para moverte. Tu viaje te presentará elecciones. Responde con tu instinto. Tu camino revelará tu voz." },
+            welcome_instructions: { en: "Use the Arrow Keys or on-screen buttons to move. Your journey will present you with choices. Respond with your instinct. Your path will reveal your voice.", pt: "Use as Setas ou os botões na tela para mover. Sua jornada apresentará escolhas. Responda com seu instinto. Seu caminho revelará sua voz.", es: "Usa las Teclas de Flecha o los botones en pantalla para moverte. Tu viaje te presentará elecciones. Responde con tu instinto. Tu camino revelará tu voz." },
             welcome_start: { en: "Start Journey", pt: "Iniciar Jornada", es: "Iniciar Viaje" },
             
             // ENCOUNTERS
@@ -309,7 +355,7 @@
             { x: 5600, id: 'echoing_cave', icon: '⛰️', triggered: false, titleKey: 'echoing_cave_title', descKey: 'echoing_cave_desc', choices: [{ textKey: 'echoing_cave_choice_1', style: 'direct' }, { textKey: 'echoing_cave_choice_2', style: 'avoidant' }, { textKey: 'echoing_cave_choice_3', style: 'passive' }], color: '#81ecec' },
             { x: 6400, id: 'tangled_vines', icon: '🌿', triggered: false, titleKey: 'tangled_vines_title', descKey: 'tangled_vines_desc', choices: [{ textKey: 'tangled_vines_choice_1', style: 'direct' }, { textKey: 'tangled_vines_choice_2', style: 'avoidant' }, { textKey: 'tangled_vines_choice_3', style: 'passive' }], color: '#00b894' },
             { x: 7200, id: 'shifting_sands', icon: '🏜️', triggered: false, titleKey: 'shifting_sands_title', descKey: 'shifting_sands_desc', choices: [{ textKey: 'shifting_sands_choice_1', style: 'direct' }, { textKey: 'shifting_sands_choice_2', style: 'avoidant' }, { textKey: 'shifting_sands_choice_3', style: 'passive' }], color: '#fab1a0' },
-            { x: 8000, id: 'mirror_lake', icon: '�', triggered: false, titleKey: 'mirror_lake_title', descKey: 'mirror_lake_desc', choices: [{ textKey: 'mirror_lake_choice_1', style: 'direct' }, { textKey: 'mirror_lake_choice_2', style: 'avoidant' }, { textKey: 'mirror_lake_choice_3', style: 'passive' }], color: '#6c5ce7' },
+            { x: 8000, id: 'mirror_lake', icon: '💧', triggered: false, titleKey: 'mirror_lake_title', descKey: 'mirror_lake_desc', choices: [{ textKey: 'mirror_lake_choice_1', style: 'direct' }, { textKey: 'mirror_lake_choice_2', style: 'avoidant' }, { textKey: 'mirror_lake_choice_3', style: 'passive' }], color: '#6c5ce7' },
             { x: 8800, id: 'final', icon: '🏁', triggered: false, color: '#ffffff' } // Final point
         ];
 
@@ -343,10 +389,10 @@
         // --- EVENT HANDLERS & UI LOGIC ---
         function setLanguage(lang) {
             currentLanguage = lang;
-            Object.values(langButtons).forEach(btn => btn.classList.remove('active'));
-            langButtons[currentLanguage].classList.add('active');
+            Object.keys(langButtons).forEach(key => {
+                langButtons[key].classList.toggle('active', key === lang);
+            });
             
-            // Update welcome screen if visible
             if(gameState === 'welcome') {
                 document.getElementById('welcome-title').innerText = translations.welcome_title[currentLanguage];
                 document.getElementById('welcome-instructions').innerText = translations.welcome_instructions[currentLanguage];
@@ -363,10 +409,12 @@
         document.getElementById('start-button').addEventListener('click', () => {
             welcomeBox.classList.remove('visible');
             canvas.classList.remove('paused');
+            touchControls.classList.add('visible');
             gameState = 'playing';
             startMusic();
         });
 
+        // Keyboard controls
         window.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft') keys.left = true;
             if (e.key === 'ArrowRight') keys.right = true;
@@ -376,6 +424,20 @@
             if (e.key === 'ArrowRight') keys.right = false;
         });
         
+        // Touch and Mouse controls
+        touchLeft.addEventListener('touchstart', (e) => { e.preventDefault(); keys.left = true; }, { passive: false });
+        touchLeft.addEventListener('touchend', (e) => { e.preventDefault(); keys.left = false; });
+        touchLeft.addEventListener('mousedown', (e) => { e.preventDefault(); keys.left = true; });
+        touchLeft.addEventListener('mouseup', (e) => { e.preventDefault(); keys.left = false; });
+        touchLeft.addEventListener('mouseleave', (e) => { if(e.buttons === 1) keys.left = false; });
+
+        touchRight.addEventListener('touchstart', (e) => { e.preventDefault(); keys.right = true; }, { passive: false });
+        touchRight.addEventListener('touchend', (e) => { e.preventDefault(); keys.right = false; });
+        touchRight.addEventListener('mousedown', (e) => { e.preventDefault(); keys.right = true; });
+        touchRight.addEventListener('mouseup', (e) => { e.preventDefault(); keys.right = false; });
+        touchRight.addEventListener('mouseleave', (e) => { if(e.buttons === 1) keys.right = false; });
+
+
         function triggerEncounter(encounter) {
             if (encounter.id === 'final') { showResult(); return; }
             gameState = 'encounter';
@@ -572,4 +634,3 @@
     </script>
 </body>
 </html>
-�
